@@ -52,6 +52,8 @@ if __name__ == '__main__':
     dataset_path = "/home/mmc-user/dataset_simpsons/imgs"
     data_preloading(dataset_path)
 
+    # TODO implement training for different nets
+
 
 
 
