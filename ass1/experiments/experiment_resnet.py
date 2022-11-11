@@ -10,7 +10,14 @@ import random
 # from util.general_utils import signal_handler
 from models.pytorch_models import ResNet18
 from models.ImageDataset import ImageDataset
+from models.ImageDataset import transform
+from models.ImageDataset import transform_geometric
+from models.ImageDataset import transform_with_colorjitter
 
+
+
+
+ex = Experiment()
 
 # make experiment reproducible with notations from:
 # https://pytorch.org/docs/stable/notes/randomness.html
@@ -18,8 +25,8 @@ def make_reproducible():
     random.seed(0)
     torch.manual_seed(0)
     np.random.seed(0)
-
-ex = Experiment()
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = True
 
 def train(dataloader, model, optimizer, device, cur_iter, scaler=None):
     """Train model one epoch."""
@@ -78,14 +85,14 @@ def get_test_accuracy(model, val_dataloader, device):
     pass
 
 
-def model_train_and_eval(model, train_dataloader, val_dataloader, num_classes, epochs):
+def model_train_and_eval(model, train_dataloader, val_dataloader, train_data, batch_size, num_classes, epochs, learning_rate,  device):
 
     trainable_parameters = [p for p in model.parameters() if p.requires_grad]
 
+    criterion = torch.nn.CrossEntropyLoss()
     # use of adam optimizer and an learning rate of 0.0001
-    optimizer = torch.optim.Adam(trainable_parameters, lr=0.0001)
+    optimizer = torch.optim.Adam(trainable_parameters, lr=learning_rate)
     # set 30 epochs of training
-    epochs = 30
     num_batches = np.ceil(len(train_data) / batch_size)
     best_acc = 0
     for e in range(epochs):
@@ -121,7 +128,7 @@ def run(_config):
     # print(cfg)
 
     full_dataset = ImageDataset("data/initial_data/test/labels_middle_2022-09-01-04-37-47.json",
-                                "data/initial_data/test/", transform=transform(true))
+                                "data/initial_data/test/", transform(True), transform_geometric(False), transform_with_colorjitter())
     train_size = int(0.6 * len(full_dataset))
     val_size = len(full_dataset) - train_size
 
@@ -134,9 +141,10 @@ def run(_config):
     train_dataloader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True)
     val_dataloader = torch.utils.data.DataLoader(val_data, batch_size=1)
 
-    # TODO add num_classes
+    # TODO num_classes
     num_classes = 37
     epochs = 30
+    learning_rate = 0.0001
 
     model = ResNet18().model.to(device)
 

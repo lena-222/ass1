@@ -1,17 +1,13 @@
 import os
-import pandas as pd
-from torchvision.io import read_image
 import torch
 from PIL import Image
 import numpy as np
-import albumentations
-import albumentations.pytorch
 import torchvision.transforms as transforms
 import random
 
 
 # imagenet_stats: ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-def transform(c):
+def transform(yes=True):
     return transforms.Compose([transforms.ToTensor(),
                                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
                                 transforms.Resize(size=[128, 128])])
@@ -57,7 +53,7 @@ class ImageDataset(torch.utils.data.Dataset):
         #image = Image.open(img_path)
         image.show()
 
-        image = np.array(image, dtype=np.float32) / 255.0 # normalize image
+        #image = np.array(image, dtype=np.float32) / 255.0 # normalize image
         label = np.asarray(self.labels[idx])
         label = torch.from_numpy(label.copy()).long()
         # normalize and fix size at 128x128

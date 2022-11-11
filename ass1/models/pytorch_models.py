@@ -5,7 +5,7 @@ import torchvision.models.resnet
 
 
 class ResNet18(torch.nn.Module):
-    def __init__(self, pretrained=True):
+    def __init__(self):
 
         #model = torchvision.models.resnet18(pretrained=pretrained)
 
@@ -35,7 +35,7 @@ class ResNet18(torch.nn.Module):
         return self.backbone.forward(x)
 
 class ConvNextTiny(torch.nn.Module):
-    def __init__(self, num_classes, pretrained=True):
+    def __init__(self):
         #model = torchvision.models.convnext_tiny(weights=torchvision.ConvNeXt_Tiny_Weights.DEFAULT,pretrained=pretrained)
         #model.classifier[4] = torch.nn.Conv2d(256, num_classes, kernel_size=(1, 1),
         #                                      stride=(1, 1))  # Change final layer to 3 classes
