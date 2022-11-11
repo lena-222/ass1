@@ -13,27 +13,46 @@ def print_hi(name):
     print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
     print(torch.cuda.is_available())
 
-def data_loading():
-
-    dataset_path = "/home/mmc-user/dataset_simpsons/imgs"
+def data_preloading(dataset_path):
     subdir = sorted(glob(os.path.join(dataset_path, "*")))
     print(subdir)
     label = {}
     image_list = {}
-    i = 0
+    data_dict = {}
+    data_dict_splitted = {}
+    idx = 0
+    idy = 0
     for sub in subdir:
-        #label[i] = sub.split("/")[-1]
-        #print(label[i])
-        image_list[i] = sorted(glob(os.path.join(sub, "*.jpg")))
-        print(image_list[i])
-        print(len(image_list[i]))
-        i += 1
+        label[idx] = sub.split("/")[-1]
+        print(label[idx])
 
+        image_list[idx] = sorted(glob(os.path.join(sub, "*.jpg")))
+        print(image_list[idx])
+        print(len(image_list[idx]))
+        data_dict[idx] = {"label": sub.split("/")[-1], "img_dir": sorted(glob(os.path.join(sub, "*.jpg")))}
+        idx += 1
+        for image_dir in sorted(glob(os.path.join(sub, "*.jpg"))):
+            data_dict_splitted[idy] = {"label": sub.split("/")[-1], "img_dir": image_dir}
+            idy += 1
     print(len(image_list))
+    print("data_dict")
+    print(data_dict)
+    print("data_dict_splitted")
+    print(data_dict_splitted)
+
+
+    return
 
     # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    data_loading()
+
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+    # create dataset with custom Dataset class ImageDataset
+    dataset_path = "/home/mmc-user/dataset_simpsons/imgs"
+    data_preloading(dataset_path)
+
+
 
 
 

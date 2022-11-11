@@ -1,45 +1,64 @@
 import torch
 import torchvision
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+import torchvision.models
+import torchvision.models.resnet
 
-class MaskRCNNResnet:
-    """Faster RCNN based on a Resnet."""
 
+class ResNet18(torch.nn.Module):
+    def __init__(self, pretrained=True):
+
+        #model = torchvision.models.resnet18(pretrained=pretrained)
+
+        #model.classifier[4] = torch.nn.Conv2d(256, num_classes, kernel_size=(1, 1),
+        #                                      stride=(1, 1))  # Change final layer to 3 classes
+        #self.model = model
+        super(ResNet18, self).__init__()
+        self.in_features = 512
+        self.out_features = 37
+        self.backbone = torchvision.models.resnet18(weights=torchvision.ResNet18_Weights.DEFAULT, pretrained=True)
+        self.backbone.fc = torch.nn.Linear(in_features=self.in_features, out_features=self.out_features)
+        #self.backbone.fc(torchvision.nn.linear(num_classes))
+
+    def forward(self, x):
+        '''
+        Alte Version
+                x = self.backbone.conv1(x)
+                x = self.backbone.relu(self.backbone.bn1(x))
+                x = self.backbone.conv1(x)
+                x = self.backbone.layer1(x)
+                x = self.backbone.layer2(x)
+                x = self.backbone.layer3(x)
+                x = self.backbone.layer4(x)
+
+                return x
+        '''
+        return self.backbone.forward(x)
+
+class ConvNextTiny(torch.nn.Module):
     def __init__(self, num_classes, pretrained=True):
-        model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(pretrained=pretrained)
+        #model = torchvision.models.convnext_tiny(weights=torchvision.ConvNeXt_Tiny_Weights.DEFAULT,pretrained=pretrained)
+        #model.classifier[4] = torch.nn.Conv2d(256, num_classes, kernel_size=(1, 1),
+        #                                      stride=(1, 1))  # Change final layer to 3 classes
+        #self.model = model
+        super(ConvNextTiny, self).__init__()
+        self.in_features = 512
+        self.out_features = 37
+        self.backbone = torchvision.models.convnext_tiny(weights=torchvision.ConvNeXt_Tiny_Weights.DEFAULT, pretrained=True)
+        # TODO Google fully connected Schicht Namen googlen.
+        self.backbone.fc = torch.nn.Linear(in_features=self.in_features, out_features=self.out_features)
 
-        # get the number of input features for the classifier
-        in_features = model.roi_heads.box_predictor.cls_score.in_features
-        # replace the pre-trained head with a new one
-        model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    def forward(self, x):
+        '''
+        Alte Version
+                x = self.backbone.conv1(x)
+                x = self.backbone.relu(self.backbone.bn1(x))
+                x = self.backbone.conv1(x)
+                x = self.backbone.layer1(x)
+                x = self.backbone.layer2(x)
+                x = self.backbone.layer3(x)
+                x = self.backbone.layer4(x)
 
-        # Stop here if you are fine-tunning Faster-RCNN
-
-        # now get the number of input features for the mask classifier
-        in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
-        hidden_layer = 256
-        # and replace the mask predictor with a new one
-        model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask, hidden_layer, num_classes)
-
-        self.model = model
-
-
-class DeepLabV3Resnet:
-    def __init__(self, num_classes, pretrained=True):
-        model = torchvision.models.segmentation.deeplabv3_resnet50(pretrained=pretrained)
-
-        model.classifier[4] = torch.nn.Conv2d(256, num_classes, kernel_size=(1, 1), stride=(1, 1)) # Change final layer to 3 classes
-
-        self.model = model
-
-class ResNet18:
-    def __init__(self, num_classes, pretrained=True):
-        model = torchvision.models.segmentation.deeplabv3_resnet50(pretrained=pretrained)
-
-        model.classifier[4] = torch.nn.Conv2d(256, num_classes, kernel_size=(1, 1),
-                                              stride=(1, 1))  # Change final layer to 3 classes
-
-        self.model = model
-
+                return x
+        '''
+        return self.backbone.forward(x)
 

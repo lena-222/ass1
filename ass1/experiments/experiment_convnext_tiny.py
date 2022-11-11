@@ -7,10 +7,12 @@ from sacred import Experiment
 from util.general_utils import signal_handler
 import albumentations
 import albumentations.pytorch
-from models.pytorch_models import MaskRCNNResnet
+from models.pytorch_models import ConvNextTiny
 from models.coco_image_dataset import CocoImageDataset
 
 import numpy as np
+
+torch.manual_seed(0)
 
 ex = Experiment()
 
