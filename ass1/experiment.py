@@ -4,8 +4,6 @@
 import sys
 
 import torch
-import copy
-from sacred import Experiment
 #from ema_pytorch import EMA
 import numpy as np
 import random
@@ -14,18 +12,9 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm # will be used for visualization loading
 
 # from util.general_utils import signal_handler
-import main
-from models.pytorch_models import ResNet18
-from models.pytorch_models import ConvNextTiny
-from models.ImageDataset import ImageDataset
-from models.ImageDataset import transform
-from models.ImageDataset import transform_geometric
-from models.ImageDataset import transform_with_colorjitter
+from pytorch_models import ResNet18
+from pytorch_models import ConvNextTiny
 
-
-
-
-#ex = Experiment()
 
 # make experiment reproducible with notations from:
 # https://pytorch.org/docs/stable/notes/randomness.html

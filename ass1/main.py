@@ -3,10 +3,13 @@ import torch.utils.data
 import os
 from glob import glob
 
-from experiments.experiment import model_train_and_eval
-from experiments.experiment import make_reproducible
+import experiment
+from experiment import make_reproducible
+#from experiments import experiment
+#from experiment import make_reproducible
+from experiment import model_train_and_eval
 
-from models.ImageDataset import ImageDataset
+from ImageDataset import ImageDataset
 
 def print_cuda_available():
     print(torch.cuda.is_available())
@@ -55,7 +58,7 @@ if __name__ == '__main__':
     # Implement machine learning things here.
 
     # for 1.f)
-    make_reproducible()
+    experiment.make_reproducible()
 
     # batch-size of 64
     batch_size = 64
