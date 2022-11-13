@@ -7,21 +7,21 @@ import random
 
 
 # imagenet_stats: ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-def transform(yes=True):
+def transform():
     return transforms.Compose([transforms.ToTensor(),
                                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
                                 transforms.Resize(size=[128, 128])])
 
-# TODO add data augmentation: random cropping; horizontal flipping
-def transform_geometric(yes=False):
+# add data augmentation: random cropping; horizontal flipping
+def transform_geometric():
     return transforms.Compose([transforms.ToTensor(),
                                           transforms.RandomHorizontalFlip(p=0.5),
                                           transforms.RandomCrop(random.sample(range(60, 128)), random.sample(range(60, 128))),
                                           transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
                                           transforms.Resize(size=[128, 128])])
 
-# TODO add ColorJitter augmentation
-def transform_with_colorjitter(yes=False):
+# add ColorJitter augmentation
+def transform_colorjitter():
     return transforms.Compose([transforms.ToTensor(),
                                 transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
                                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
@@ -29,15 +29,18 @@ def transform_with_colorjitter(yes=False):
 
 
 class ImageDataset(torch.utils.data.Dataset):
-    def __init__(self, images, labels, transform, transform_geometric, transform_with_colorjitter):
+    def __init__(self, images, labels, transform_type):
         #self.image = pd.read_csv(annotations_file)
         #self.images = torch(images)
         #self.labels = torch(labels)
         self.images = images
         self.labels = labels
-        self.transform = transform
-        self.transform_geometric = transform_geometric
-        self.transform = transform_with_colorjitter
+        if transform_type == "geometric":
+            self.transform = transform_geometric()
+        elif transform_type == "colorjitter":
+            self.transform = transform_colorjitter()
+        else:
+            self.transform = transform()
         self.num_examples = len(self.images)
 
     def __len__(self):
