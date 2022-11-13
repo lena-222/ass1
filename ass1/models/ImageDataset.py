@@ -1,8 +1,9 @@
-import os
+#import os
 import torch
+import torch.utils.data
+import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
-import torchvision.transforms as transforms
 import random
 
 
@@ -14,18 +15,22 @@ def transform():
 
 # add data augmentation: random cropping; horizontal flipping
 def transform_geometric():
+    sample = random.randrange(60, 128)
     return transforms.Compose([transforms.ToTensor(),
                                           transforms.RandomHorizontalFlip(p=0.5),
-                                          transforms.RandomCrop(random.sample(range(60, 128)), random.sample(range(60, 128))),
+                                          transforms.RandomCrop(sample,sample),
                                           transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
                                           transforms.Resize(size=[128, 128])])
 
 # add ColorJitter augmentation
 def transform_colorjitter():
+    sample = random.randrange(60, 128)
     return transforms.Compose([transforms.ToTensor(),
-                                transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
-                                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-                                transforms.Resize(size=[128, 128])])
+                               transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
+                               transforms.RandomHorizontalFlip(p=0.5),
+                               transforms.RandomCrop(sample, sample),
+                               transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+                               transforms.Resize(size=[128, 128])])
 
 
 class ImageDataset(torch.utils.data.Dataset):
@@ -48,24 +53,13 @@ class ImageDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
 
-        image_id = self.ids[idx]
-        filename_img = self.imgs[image_id]["file_name"]
-        img_path = os.path.join(self.img_dir, filename_img)
-        image = Image.open(img_path).convert("RGB")
-        #image = read_image(img_path)
-        #image = Image.open(img_path)
-        image.show()
-
+        filename_img = self.images[idx]["file_name"]
+        #img_path = os.path.join(self.images, filename_img)
+        image = Image.open(filename_img).convert("RGB")
         #image = np.array(image, dtype=np.float32) / 255.0 # normalize image
+        image.show()
         label = np.asarray(self.labels[idx])
         label = torch.from_numpy(label.copy()).long()
-        # normalize and fix size at 128x128
         if self.transform:
             image = self.transform(image)
-        # add geometric augmentation
-        if self.transform_geometric:
-            image = self.transform_geometric(image)
-        # add ColorJitter augmentation
-        if self.transform_with_colorjitter:
-            image = self.transform_with_colorjitter(image)
         return image, label

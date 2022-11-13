@@ -188,20 +188,11 @@ def model_train_and_eval(model_name,
     writer = SummaryWriter()
 
     for epoch in range(0, epochs + 1):
-        writer.add_scalar('mean-per-class-accuracy/validation', accuracy_per_epoch[epoch], epoch)
+        writer.add_scalar('mean per class accuracy - validation', accuracy_per_epoch[epoch], epoch)
 
     writer.close()
 
     print("Done!")
-
-
-#@ex.main
-#def run(_config):
-#def start_training(epochs, ):
-#    """Register signal handler."""
-    # signal.signal(signal.SIGINT, signal_handler)
-    # cfg = _config
-
 
 
 # TODO use a cycle learning rate scheduler
