@@ -21,7 +21,6 @@ class ResNet18(torch.nn.Module):
 
     def forward(self, x):
         '''
-        Alte Version
                 x = self.backbone.conv1(x)
                 x = self.backbone.relu(self.backbone.bn1(x))
                 x = self.backbone.conv1(x)
@@ -49,7 +48,6 @@ class ConvNextTiny(torch.nn.Module):
 
     def forward(self, x):
         '''
-        Alte Version
                 x = self.backbone.conv1(x)
                 x = self.backbone.relu(self.backbone.bn1(x))
                 x = self.backbone.conv1(x)
