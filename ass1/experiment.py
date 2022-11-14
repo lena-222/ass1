@@ -112,10 +112,12 @@ def val(dataloader,
                                                                                         str(cur_iter) + " ]",
                   file=sys.stdout) as pbar:
 
-            for batch, (images, labels) in enumerate(dataloader):
-                images = list(image.to(device) for image in images)
+            for batch, data in enumerate(dataloader):
+                images = data[0].to(device)
+                labels = data[1].to(device)
+                #images = list(image.to(device) for image in images)
                 #targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-                labels = list(label.to(device) for label in labels)
+                #labels = list(label.to(device) for label in labels)
                 output = model(images)
                 
                 # use mean per class accuracy as evaluation metric
@@ -194,7 +196,7 @@ def model_train_and_eval(model_name,
             #val_acc, _, _ = get_test_accuracy(model, val_dataloader, device)
 
             val_acc = val(dataloader=val_dataloader, data=val_data, model=model,
-                          device=device, cur_iter=cur_iter, num_classes=num_classes).item()
+                          device=device, cur_iter=cur_iter, num_classes=num_classes, batch_size=batch_size).item()
             accuracy_per_epoch.append(val_acc)
 
             if val_acc >= max(accuracy_per_epoch):

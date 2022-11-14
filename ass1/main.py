@@ -35,7 +35,7 @@ def data_preloading(data_path):
         print(image_list[idx])
         print(len(image_list[idx]))
         data_dict[idx] = {"label": sub.split("/")[-1], "img_dir": sorted(glob(os.path.join(sub, "*.jpg")))}
-        idx += 1
+
         for image_dir in sorted(glob(os.path.join(sub, "*.jpg"))):
             #data_dict_split[idy] = {"idx": idy, "label": sub.split("/")[-1], "img_dir": image_dir}
             #data_dict_split[image_dir] = {image_dir: sub.split("/")[-1]}
@@ -44,6 +44,7 @@ def data_preloading(data_path):
             labels.append(idx)
             #labels[idy] = sub.split("/")[-1]
             idy += 1
+        idx += 1
     # print(len(image_list))
     # print("data_dict")
     # print(data_dict)
