@@ -123,9 +123,9 @@ def val(dataloader,
     numerator = [correct_labels[i] / all_labels[i] for i in not_zero]
     accuracy = sum(numerator) / len(not_zero)
 
-    print("Mean per class accuracy: ", accuracy.item())
+    print("Mean per class accuracy: ", accuracy)
 
-    return accuracy.item()
+    return accuracy
 
 
 def evaluate_model(accuracy_per_epoch):
@@ -165,7 +165,7 @@ def model_train_and_eval(dataset_path,
     full_dataset = ImageDataset(data_path=dataset_path, transform_type=transform_type)
 
     # Split data into train and validation data
-    print("Start loading ImageDataSet...")
+    print("Split dataset into train and validation set...")
     train_size = int(0.6 * len(full_dataset))
     val_size = len(full_dataset) - train_size
 
@@ -218,22 +218,24 @@ def model_train_and_eval(dataset_path,
                       device=device, cur_iter=cur_iter, num_classes=num_classes, batch_size=batch_size).item()
         accuracy_per_epoch[e] = val_acc
 
-        if val_acc >= max(accuracy_per_epoch):
-            # best_acc = val_acc
-            torch.save(model.state_dict(), "output/best_model_weights.pth")
-            torch.save(optimizer.state_dict(), "output/best_optimizer_state.pth")
-            print("Saved best PyTorch Model State to output/model_weights.pth")
         if use_scheduler:
             scheduler.step()
 
-        torch.save(model.state_dict(), "output/model_weights_ConvNeXt_Tiny.pth")
-        print("Saved PyTorch Model State to output/model_weightsConvNeXt_Tiny.pth")
-        torch.save(optimizer.state_dict(), "output/optimizer_stateConvNeXt_Tiny.pth")
-        print("Saved PyTorch Optimizer State to output/optimizer_weightsConvNeXt_Tiny.pth")
+        torch.save(model.state_dict(), "output/model_weights_2a.pth")
+        print("Saved PyTorch Model State to output/model_weights_2a.pth")
+        torch.save(optimizer.state_dict(), "output/optimizer_state_2a.pth")
+        print("Saved PyTorch Optimizer State to output/optimizer_weights_2a.pth")
+
+        if val_acc >= max(accuracy_per_epoch):
+            # best_acc = val_acc
+            torch.save(model.state_dict(), "output/best_model_weights_2a.pth")
+            torch.save(optimizer.state_dict(), "output/best_optimizer_state_2a.pth")
+            print("Saved best PyTorch Model State to output/model_weights_2a.pth")
+
         evaluate_model(accuracy_per_epoch=accuracy_per_epoch)
         print("Evaluation succeeded")
-        model.load_state_dict(torch.load('output/model_weightsConvNeXt_Tiny.pth'))
-        optimizer.load_state_dict(torch.load('output/optimizer_stateConvNeXt_Tiny.pth'))
+        model.load_state_dict(torch.load('output/model_weights_2a.pth'))
+        optimizer.load_state_dict(torch.load('output/optimizer_state_2a.pth'))
 
     print("Done!")
 
