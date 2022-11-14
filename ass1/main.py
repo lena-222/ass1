@@ -224,6 +224,6 @@ if __name__ == '__main__':
     # TODO implement training for different nets
     # TODO train the first ResNet
     # ResNet-training for 2a)
-    model_train_and_eval(model_name="ResNet18", train_dataloader=train_dataloader, val_dataloader=val_dataloader,
-                         train_data=train_data, val_data=val_data, batch_size=batch_size, num_classes=num_classes,
-                         epochs=epochs, learning_rate=learning_rate, device=device, accuracy_per_epoch=accuracy_per_epoch)
+    #model_train_and_eval(model_name="ResNet18", train_dataloader=train_dataloader, val_dataloader=val_dataloader,
+    #                     train_data=train_data, val_data=val_data, batch_size=batch_size, num_classes=num_classes,
+    #                     epochs=epochs, learning_rate=learning_rate, device=device, accuracy_per_epoch=accuracy_per_epoch)

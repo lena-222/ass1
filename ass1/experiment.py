@@ -24,7 +24,7 @@ def make_reproducible():
     torch.manual_seed(0)
     np.random.seed(0)
     torch.Generator().manual_seed(0)
-    torch.backends.cudnn.benchmark = False
+    #torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.benchmark = True
 
 def train(dataloader,
@@ -83,7 +83,7 @@ def train(dataloader,
                 optimizer.step()
 
             pbar.update(batch_size)
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
             # TODO Wofür ist new_iter?
             new_iter = cur_iter + batch
 
@@ -99,7 +99,7 @@ def val(dataloader,
     #model.train()
     #val_loss_list = []
 
-    labels = torch.zeros(model.out_features)
+    all_labels = torch.zeros(model.out_features)
     correct_labels = torch.zeros(model.out_features)
 
     model.eval()
@@ -127,18 +127,18 @@ def val(dataloader,
                     if pred_label == label:
                         correct_labels[label] += 1
                     
-                    labels[label] += 1
+                    all_labels[label] += 1
 
                 pbar.update(batch_size)
-                torch.cuda.synchronize()
+                #torch.cuda.synchronize()
 
     # mean per class accuracy
     not_zero = []
     for i in range(0, num_classes):
-        if labels[i] > 0:
+        if all_labels[i] > 0:
             not_zero.append(i)
 
-    numerator = [correct_labels[i] / labels[i] for i in not_zero]
+    numerator = [correct_labels[i] / all_labels[i] for i in not_zero]
     accuracy = sum(numerator) / len(not_zero)
 
     print("Medium per class accuracy: " + str(accuracy.item()))
@@ -207,17 +207,18 @@ def model_train_and_eval(model_name,
             if use_scheduler:
                 scheduler.step()
 
-        torch.save(model.state_dict(), "output/model_weights.pth")
-        model.load_state_dict(torch.load('model_weights.pth'))
-        print("Saved PyTorch Model State to output/model_weights.pth")
-        torch.save(optimizer.state_dict(), "output/optimizer_state.pth")
-
+        torch.save(model.state_dict(), "output/model_weights_ConvNeXt_Tiny.pth")
+        model.load_state_dict(torch.load('output/model_weightsConvNeXt_Tiny.pth'))
+        print("Saved PyTorch Model State to output/model_weightsConvNeXt_Tiny.pth")
+        torch.save(optimizer.state_dict(), "output/optimizer_stateConvNeXt_Tiny.pth")
+        print("Saved PyTorch Optimizer State to output/optimizer_weightsConvNeXt_Tiny.pth")
+        optimizer.load_state_dict(torch.load('output/optimizer_stateConvNeXt_Tiny.pth'))
 
 
     print("Writing output")
     writer = SummaryWriter()
 
-    for epoch in range(0, epochs + 1):
+    for epoch in range(0, len(accuracy_per_epoch)):
         writer.add_scalar('mean per class accuracy - validation', accuracy_per_epoch[epoch], epoch)
 
     writer.close()
