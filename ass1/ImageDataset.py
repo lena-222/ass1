@@ -1,4 +1,6 @@
-#import os
+import os
+from glob import glob
+
 import torch
 import torch.utils.data
 import torchvision.transforms as transforms
@@ -52,14 +54,17 @@ class ImageDataset(torch.utils.data.Dataset):
         return self.num_examples
 
     def __getitem__(self, idx):
-
-        filename_img = self.images[idx]["file_name"]
+        #print("inside ImageDataset __getitem__")
+        #print(idx)
+        filename_img = self.images[idx]
+        #print(filename_img)
         #img_path = os.path.join(self.images, filename_img)
         image = Image.open(filename_img).convert("RGB")
-        #image = np.array(image, dtype=np.float32) / 255.0 # normalize image
-        image.show()
-        label = np.asarray(self.labels[idx])
-        label = torch.from_numpy(label.copy()).long()
         if self.transform:
             image = self.transform(image)
+        #image = np.array(image, dtype=np.float32) / 255.0 # normalize image
+        #image.show()
+        label = np.asarray(self.labels[idx])
+        label = torch.from_numpy(label.copy()).long()
+
         return image, label

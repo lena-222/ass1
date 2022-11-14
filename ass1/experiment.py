@@ -4,6 +4,7 @@
 import sys
 
 import torch
+import torch.backends
 #from ema_pytorch import EMA
 import numpy as np
 import random
@@ -26,42 +27,74 @@ def make_reproducible():
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.benchmark = True
 
-def train(dataloader, train_data, model, optimizer, device, criterion, cur_iter, scaler=None):
+def train(dataloader,
+          data,
+          model,
+          optimizer,
+          device,
+          criterion,
+          cur_iter,
+          batch_size,
+          use_scaler):
     """Train model one epoch."""
 
     model.train()
 
-    with tqdm(total=len(train_data), desc="Training progress:\t\t", bar_format="{l_bar}{bar:50}| \\ [ epoch " +
+    with tqdm(total=len(data), desc="Training progress:\t\t", bar_format="{l_bar}{bar:50}| \\ [ epoch " +
                                                                                   str(cur_iter) + " ]",
               file=sys.stdout) as pbar:
         
-        for batch, (images, targets) in enumerate(dataloader):
-    
-            images = list(image.to(device) for image in images)
-            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-    
-            optimizer.zero_grad()
-            
-            # TODO add Mixed Precision Training
-            with torch.cuda.amp.autocast(enabled=scaler is not None):
+        for batch, data in enumerate(dataloader):
+            #print("batch")
+            #print(batch)
+            #print("images")
+            #print(x)
+            #print("labels")
+            #print(y)
+            #input = images.to(device)
+            #images = list(image.to(device) for image in x)
+            # labels = list(label.to(device) for label in y)
+            # targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+            #for i, data in enumerate(training_loader, 0):
+            #    inputs, labels = data[0].to(device), data[1].to(device)
 
-                y_hat = model(images, targets)
-                losses = criterion(y_hat, targets)
-            
-            if scaler is not None:
-                scaler.scale(losses).backward()
-                scaler.step(optimizer)
-                scaler.update()
+            #torch.backends.cudnn.deterministic = False
+            #images, labels = data.to(device)
+            images = data[0].to(device)
+            labels = data[1].to(device)
+
+            optimizer.zero_grad()
+
+            # torch.backends.cudnn.enabled = False
+            if use_scaler:
+                scaler = amp.GradScaler()
+                # TODO add Mixed Precision Training
+                with torch.cuda.amp.autocast(enabled=scaler is not None):
+
+                    y_hat = model(images)
+                    loss = criterion(y_hat, labels)
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
             else:
-                losses.backward()
+                y_hat = model(images)
+                loss = criterion(y_hat, labels)
+                loss.backward()
                 optimizer.step()
 
-            pbar.update(main.BATCH_SIZE)
+            pbar.update(batch_size)
+            torch.cuda.synchronize()
             # TODO Wofür ist new_iter?
             new_iter = cur_iter + batch
 
 
-def val(dataloader, val_data, model, device, cur_iter, num_classes):
+def val(dataloader,
+        data,
+        model,
+        device,
+        cur_iter,
+        num_classes,
+        batch_size):
     """Evaluate model on validation data."""
     #model.train()
     #val_loss_list = []
@@ -75,18 +108,18 @@ def val(dataloader, val_data, model, device, cur_iter, num_classes):
 
     with torch.no_grad():
 
-        with tqdm(total=len(val_data), desc="Validation progress:\t", bar_format="{l_bar}{bar:50}| \\ [ epoch " +
+        with tqdm(total=len(data), desc="Validation progress:\t", bar_format="{l_bar}{bar:50}| \\ [ epoch " +
                                                                                         str(cur_iter) + " ]",
                   file=sys.stdout) as pbar:
 
-            for batch, (images, targets) in enumerate(dataloader):
+            for batch, (images, labels) in enumerate(dataloader):
                 images = list(image.to(device) for image in images)
-                targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-    
-                output = model(images, targets)
+                #targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+                labels = list(label.to(device) for label in labels)
+                output = model(images)
                 
                 # use mean per class accuracy as evaluation metric
-                for label, prediction in zip(targets, output):
+                for label, prediction in zip(labels, output):
                     pred_label = torch.argmax(prediction)
                     
                     if pred_label == label:
@@ -94,7 +127,8 @@ def val(dataloader, val_data, model, device, cur_iter, num_classes):
                     
                     labels[label] += 1
 
-                pbar.update(main.BATCH_SIZE)
+                pbar.update(batch_size)
+                torch.cuda.synchronize()
 
     # mean per class accuracy
     not_zero = []
@@ -113,6 +147,7 @@ def model_train_and_eval(model_name,
                          train_dataloader,
                          val_dataloader,
                          train_data,
+                         val_data,
                          batch_size,
                          num_classes,
                          epochs,
@@ -124,9 +159,9 @@ def model_train_and_eval(model_name,
                          ema_rate = None):
 
     if model_name == 'ResNet18':
-        model = ResNet18().model.to(device)
+        model = ResNet18().to(device)
     elif model_name == 'ConvNext':
-        model = ConvNextTiny().model.to(device)
+        model = ConvNextTiny().to(device)
     else:
         raise ValueError("Model not found!")
 
@@ -136,7 +171,7 @@ def model_train_and_eval(model_name,
     criterion = torch.nn.CrossEntropyLoss()
 
     # set adam optimizer and a learning rate of 0.0001
-    # create schedular, if use_scheduler == True
+    # eventually create schedular
     if use_scheduler:
         optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
         scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.01, max_lr=0.1)
@@ -145,33 +180,37 @@ def model_train_and_eval(model_name,
 
     num_batches = np.ceil(len(train_data) / batch_size)
     best_acc = 0 # save the best accuracy later
-
+    use_scaler = False
     for e in range(epochs):
         cur_iter = e * num_batches
         with tqdm(total=len(train_data), desc="Training progress:\t\t",
                   bar_format="{l_bar}{bar:50}| \\ [ epoch " + str(cur_iter) +
                              " ]",file=sys.stdout) as pbar:
-            train(train_dataloader, model, optimizer, device, criterion, cur_iter, scaler=None)
-            pbar.update(main.BATCH_SIZE)
+            train(dataloader=train_dataloader, data=train_data,
+                  model=model, optimizer=optimizer, device=device, criterion=criterion,
+                  cur_iter=cur_iter, batch_size=batch_size, use_scaler=use_scaler)
+            pbar.update(batch_size)
             cur_iter += num_batches
             #val_acc, _, _ = get_test_accuracy(model, val_dataloader, device)
-            val_acc = val(val_dataloader, model, device, criterion, cur_iter).item()
+
+            val_acc = val(dataloader=val_dataloader, data=val_data, model=model,
+                          device=device, cur_iter=cur_iter, num_classes=num_classes).item()
             accuracy_per_epoch.append(val_acc)
 
-            if val_acc >= best_acc:
-                best_acc = val_acc
+            if val_acc >= max(accuracy_per_epoch):
+                #best_acc = val_acc
                 torch.save(model.state_dict(), "output/best_model_weights.pth")
                 torch.save(optimizer.state_dict(), "output/best_optimizer_state.pth")
-
+                print("Saved best PyTorch Model State to output/model_weights.pth")
             if use_scheduler:
                 scheduler.step()
 
         torch.save(model.state_dict(), "output/model_weights.pth")
         model.load_state_dict(torch.load('model_weights.pth'))
-
+        print("Saved PyTorch Model State to output/model_weights.pth")
         torch.save(optimizer.state_dict(), "output/optimizer_state.pth")
 
-    print("Saved PyTorch Model State to output/model_weights.pth")
+
 
     print("Writing output")
     writer = SummaryWriter()
