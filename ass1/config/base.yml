@@ -1,0 +1,24 @@
+# global options
+set_seeds: True
+random_seed: 42
+
+
+# paths etc.
+data:
+    root: '/home/mmc-user/.'
+    data: './dataset_simpsons/imgs'
+    image_size: 128
+    tansform_type: 'transform'
+
+# model and train parameters
+model:
+    lr: 0.0001
+    optimizer: "adam"
+    criterion: nn.CrossEntropyLoss() # useless?
+    batch_size: 64
+    epochs: 30
+
+
+
+
+
