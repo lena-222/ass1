@@ -14,11 +14,11 @@ if __name__ == '__main__':
     learning_rate = 0.0001
 
     transform_type = "transform"
-
+    '''
     # TODO implement training for different nets
     # TODO train the first ResNet
     # ResNet-training for 2a)
-    model_train_and_eval(dataset_path=dataset_path,
+    model_train_and_eval(dataset_path="/home/mmc-user/dataset_simpsons/imgs",
                          transform_type=transform_type,
                          model_name="ResNet18",
                          batch_size=batch_size,
@@ -26,6 +26,7 @@ if __name__ == '__main__':
                          epochs=epochs,
                          learning_rate=learning_rate)
     '''
+
     # ConvNext-training for 2b)
     model_train_and_eval(dataset_path=dataset_path,
                          transform_type=transform_type,
@@ -34,7 +35,7 @@ if __name__ == '__main__':
                          num_classes=num_classes,
                          epochs=epochs,
                          learning_rate=learning_rate)
-    '''
+
 
     '''
     # Training of the best model with EMA-rate 2c)

@@ -1,7 +1,7 @@
 import torch
 import torchvision
-from torchvision.models import ConvNeXt_Tiny_Weights
-from torchvision.models import ResNet18_Weights
+from torchvision.models import ConvNeXt_Tiny_Weights, ResNet18_Weights
+
 
 
 # import torchvision.models.resnet
@@ -55,7 +55,7 @@ class ConvNextTiny(torch.nn.Module):
         self.backbone = torchvision.models.convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
         self.backbone.fc = torch.nn.Linear(in_features=self.in_features, out_features=self.out_features)
 
-        self.classifier_layer_norm = ConvNextTiny.LayerNorm2d(768)
+        self.classifier_layer_norm = torchvision.models.convnext.LayerNorm2d(768)
         self.classifier_linear = torch.nn.Linear(in_features=768, out_features=self.out_features)
 
     def forward(self, x):

@@ -11,7 +11,7 @@ from PIL import Image
 
 # imagenet_stats: ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 def transform():
-    """Preprocess data with imagenet stats"""
+    """Preprocess data with imagenet stats for the first tasks and for validation data"""
     return transforms.Compose([transforms.ToTensor(),
                                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
                                transforms.Resize(size=[128, 128])])
@@ -20,10 +20,10 @@ def transform():
 # add data augmentation: random cropping; horizontal flipping
 def transform_geometric():
     """Preprocess data with geometric augmentation"""
-    sample = random.randrange(60, 128)
+    sample = random.randrange(100, 128)
     return transforms.Compose([transforms.ToTensor(),
                                transforms.RandomHorizontalFlip(p=0.5),
-                               transforms.RandomCrop(sample, sample),
+                               transforms.RandomCrop(size=sample, pad_if_needed=True),
                                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
                                transforms.Resize(size=[128, 128])])
 
@@ -35,10 +35,9 @@ def transform_colorjitter():
     return transforms.Compose([transforms.ToTensor(),
                                transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
                                transforms.RandomHorizontalFlip(p=0.5),
-                               transforms.RandomCrop(sample, sample),
+                               transforms.RandomCrop(size=sample, pad_if_needed=True),
                                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
                                transforms.Resize(size=[128, 128])])
-
 
 def data_preloading(data_path):
     """load image_dirs and label_ids from data_path"""
