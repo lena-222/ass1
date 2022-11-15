@@ -2,7 +2,6 @@
 
 import random
 from datetime import datetime
-import sys
 
 # from ema_pytorch import EMA
 import numpy as np
@@ -13,13 +12,12 @@ import torch.cuda.amp as amp  # will be used for mixed precision training
 import torch.nn as nn
 import torch.utils.data
 from torch.utils.data import Subset
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm  # will be used for visualization loading
 
 from image_dataset import ImageDataset
 from pytorch_models import ConvNextTiny
 from pytorch_models import ResNet18
-from utils import save_plots, save_model
+from utils import save_plots, save_model#, evaluate_model#, load_best_accuracy, save_best_accuracy
 
 
 def make_reproducible():
@@ -36,21 +34,27 @@ def train(dataloader,
           device,
           criterion,
           cur_iter,
-          batch_size,
-          use_scaler):
+          use_scaler,
+          num_classes):
     """Train model one epoch."""
 
     #torch.backends.cudnn.benchmark = True
     print('Training')
     model.train()
 
-    #with tqdm(total=len(dataloader), desc="Training progress:\t\t", bar_format="{l_bar}{bar:50}|" ,
-    #          file=sys.stdout) as pbar:
-    #    for batch, data in enumerate(dataloader):
-    train_running_correct = 0.0
+    all_labels = torch.zeros(model.out_features)
+    correct_labels = torch.zeros(model.out_features)
+
+    #train_running_correct = 0.0
     counter = 0.0
     for i, data in tqdm(enumerate(dataloader), total=len(dataloader)):
         counter += 1
+        '''
+        if counter == 3 :
+            print("Training of epoch " + str(cur_iter) + " completed.")
+            accuracy = train_running_correct / len(dataloader.dataset)
+            return accuracy
+        '''
         images = data[0].to(device)
         labels = data[1].to(device)
 
@@ -62,8 +66,8 @@ def train(dataloader,
                 output = model(images)
                 loss = criterion(output, labels)
                 # calculate the accuracy
-                _, preds = torch.max(output.data, 1)
-                train_running_correct += (preds == labels).sum().item()
+                #_, preds = torch.max(output.data, 1)
+                #train_running_correct += (preds == labels).sum().item()
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -72,81 +76,107 @@ def train(dataloader,
             loss = criterion(output, labels)
             loss.backward()
             optimizer.step()
+        # use mean per class accuracy as evaluation metric
+        for label, prediction in zip(labels, output):
+            pred_label = torch.argmax(prediction)
 
-            #pbar.update(batch_size)
-        # torch.cuda.synchronize()
+            if pred_label == label:
+                correct_labels[label] += 1
+
+            all_labels[label] += 1
+
+    # torch.cuda.synchronize()
+    # accuracy = train_running_correct / len(dataloader.dataset)
+    # mean per class accuracy
+    not_zero = []
+    for i in range(0, num_classes):
+        if all_labels[i] > 0:
+            not_zero.append(i)
+    numerator = [correct_labels[i] / all_labels[i] for i in not_zero]
+    accuracy = sum(numerator) / len(not_zero)
     print("Training of epoch " + str(cur_iter) + " completed.")
-    epoch_acc = train_running_correct / len(dataloader.dataset)
-    return epoch_acc
+
+    return accuracy
 
 
 def val(dataloader,
         model,
         device,
         cur_iter,
-        num_classes,
-        batch_size):
+        num_classes):
+
     """Evaluate model on validation data."""
     # model.train()
     # val_loss_list = []
     print('Validation')
 
-    #all_labels = torch.zeros(model.out_features)
-    #correct_labels = torch.zeros(model.out_features)
+    all_labels = torch.zeros(model.out_features)
+    correct_labels = torch.zeros(model.out_features)
 
     #torch.backends.cudnn.benchmark = True
     model.eval()
 
-    # scaler = amp.GradScaler()
-
-    valid_running_correct = 0
+    #valid_running_correct = torch.empty(num_classes)
+    #torch.zeros_like(valid_running_correct)
     counter = 0
 
     with torch.no_grad():
 
-        #with tqdm(total=len(data), desc="Validation progress:\t", bar_format="{l_bar}{bar:50}|",
-       #           file=sys.stdout) as pbar:
         for i, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 counter += 1
             #for batch, data in enumerate(dataloader):
+                '''
+                if counter == 3:
+                    print("Validation of epoch " + str(cur_iter) + " completed.")
+                    not_zero = []
+                    for i in range(0, num_classes):
+                        if all_labels[i] > 0:
+                            not_zero.append(i)
+
+                    numerator = [correct_labels[i] / all_labels[i] for i in not_zero]
+                    accuracy = sum(numerator) / len(not_zero)
+                    #accuracy = train_running_correct / len(dataloader.dataset)
+                    return accuracy
+                '''
                 images = data[0].to(device)
                 labels = data[1].to(device)
                 # forward pass
                 output = model(images)
 
                 # use mean per class accuracy as evaluation metric
-                #for label, prediction in zip(labels, output):
-               #     pred_label = torch.argmax(prediction)
+                for label, prediction in zip(labels, output):
+                    pred_label = torch.argmax(prediction)
 
-               #     if pred_label == label:
-               #         correct_labels[label] += 1
+                    if pred_label == label:
+                        correct_labels[label] += 1
 
-               #     all_labels[label] += 1
+                    all_labels[label] += 1
 
-                _, preds = torch.max(output.data, 1)
-                valid_running_correct += (preds == labels).sum().item()
+                #label, preds = torch.max(output.data, 1)
+                #valid_running_correct[label] += (preds == labels[label]).sum().item()
 
-                #pbar.update(batch_size)
             # torch.cuda.synchronize()
 
     # mean per class accuracy
-    #not_zero = []
-    #for i in range(0, num_classes):
-    #    if all_labels[i] > 0:
-    #        not_zero.append(i)
+    not_zero = []
+    for i in range(0, num_classes):
+        if all_labels[i] > 0:
+            not_zero.append(i)
 
-    #numerator = [correct_labels[i] / all_labels[i] for i in not_zero]
-    #accuracy = sum(numerator) / len(not_zero)
-
-    epoch_acc = valid_running_correct / len(dataloader.dataset)
+    numerator = [correct_labels[i] / all_labels[i] for i in not_zero]
+    accuracy = sum(numerator) / len(not_zero)
+    #valid_running_correct
+    #epoch_acc = valid_running_correct / len(dataloader.dataset)
 
     print("Validation of epoch " + str(cur_iter) + " completed.")
     #print("Mean per class accuracy: ", epoch_acc)
 
-    return epoch_acc
+    return accuracy
 
 
-def model_train_and_eval(dataset_path,
+def model_train_and_eval(plot_path,
+                         output_path,
+                         dataset_path,
                          transform_type,
                          model_name,
                          batch_size,
@@ -156,12 +186,14 @@ def model_train_and_eval(dataset_path,
                          use_scheduler=False,
                          ema=False,
                          ema_rate=None):
-    print("Experiment will be started!" )
+
+    #best_accuracy = load_best_accuracy('best_accuracy.csv')
+    print("Experiment will be started!")
 
     # datetime object containing current date and time
     now = datetime.now()
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S") # dd/mm/YY H:M:S
-    print("start date and time =", dt_string)
+    print("start date and time = ", dt_string)
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print("Used device: ", device)
@@ -215,7 +247,7 @@ def model_train_and_eval(dataset_path,
 
     # criterion for classification
     criterion = nn.CrossEntropyLoss()
-    accuracy_per_epoch = np.zeros(epochs)
+    #accuracy_per_epoch = np.zeros(epochs)
 
     # set adam optimizer and a learning rate of 0.0001
     # eventually create schedular and use sdg optimizer,
@@ -225,28 +257,60 @@ def model_train_and_eval(dataset_path,
         scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.01, max_lr=0.1)
     else:
         optimizer = torch.optim.Adam(trainable_parameters, lr=learning_rate)
+        scheduler = None
 
-    num_batches = np.ceil(len(train_data) / batch_size)
-    best_acc = 0.0  # save the best accuracy later
+    #num_batches = np.ceil(len(train_data) / batch_size)
+    #best_acc = 0.0  # save the best accuracy later
     use_scaler = True
 
     train_acc = []
     val_acc = []
-    print("Start training...")
+    best_acc_run = 0
+    best_accuracy = 0
 
-    for e in range(epochs):
+    print("Start training...")
+    '''
+    try:
+        checkpoint = torch.load(output_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_e = checkpoint['epoch'] + 1
+        criterion = checkpoint['loss']
+        # best_accuracy_run = checkpoint['best_accuracy']
+
+        best_checkpoint = torch.load("output/best_model_states.pth")
+        best_accuracy = best_checkpoint['best_accuracy']
+    except FileNotFoundError:
+        pass
+    '''
+    start_e = 1
+    for e in range(start_e, epochs + 1):
+        '''
+        try:
+            checkpoint = torch.load(output_path)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            e = checkpoint['epoch']
+            criterion = checkpoint['loss']
+            #best_accuracy_run = checkpoint['best_accuracy']
+
+            best_checkpoint = torch.load("output/best_model_states.pth")
+            best_accuracy = best_checkpoint['best_accuracy']
+        except FileNotFoundError:
+            pass
+        '''
         print("Current epoch: ", e)
         #cur_iter = e * num_batches
         train_acc_e = train(dataloader=train_dataloader, model=model, optimizer=optimizer, device=device, criterion=criterion,
-                            cur_iter=e, batch_size=batch_size, use_scaler=use_scaler)
+                            cur_iter=e, use_scaler=use_scaler, num_classes=num_classes)
         #cur_iter += num_batches
         # val_acc, _, _ = get_test_accuracy(model, val_dataloader, device)
 
         val_acc_e = val(dataloader=val_dataloader, model=model,
-                      device=device, cur_iter=e, num_classes=num_classes, batch_size=batch_size)
+                      device=device, cur_iter=e, num_classes=num_classes)
         #accuracy_per_epoch[e] = val_acc
 
-        if use_scheduler:
+        if use_scheduler and scheduler is not None:
             scheduler.step()
 
         train_acc.append(train_acc_e)
@@ -254,26 +318,34 @@ def model_train_and_eval(dataset_path,
         print(f"Training acc: {train_acc_e:.3f}")
         print(f"Validation acc: {val_acc_e:.3f}")
 
-        torch.save(model.state_dict(), "output/model_weights_2b.pth")
-        print("Saved PyTorch Model State to output/model_weights_2b.pth")
-        torch.save(optimizer.state_dict(), "output/optimizer_state_2b.pth")
-        print("Saved PyTorch Optimizer State to output/optimizer_weights_2b.pth")
+        #torch.save(model.state_dict(), "output/model_weights_2b.pth")
+        #print("Saved PyTorch Model State to output/model_weights_2b.pth")
+        #torch.save(optimizer.state_dict(), "output/optimizer_state_2b.pth")
+        #print("Saved PyTorch Optimizer State to output/optimizer_weights_2b.pth")
+        if val_acc_e > best_acc_run:
+            best_acc_run = val_acc_e
+        save_model(e, model, optimizer, criterion, best_acc_run, output_path)
 
-        if val_acc_e >= max(val_acc):
+
+        if val_acc_e >= best_accuracy:
             # best_acc = val_acc
-            torch.save(model.state_dict(), "output/best_model_weights_2b.pth")
-            torch.save(optimizer.state_dict(), "output/best_optimizer_state_2b.pth")
-            print("Saved best PyTorch Model State to output/model_weights_2b.pth")
+            #save_best_accuracy('best_accuracy.csv', val_acc_e)
+            save_model(epochs=e, model=model, optimizer=optimizer, criterion=criterion, best_accuracy=best_accuracy, output_path="output/best_model_states.pth")
+            #torch.save(model.state_dict(), "output/best_model_weights_2b.pth")
+            #torch.save(optimizer.state_dict(), "output/best_optimizer_state_2b.pth")
+            #print("Saved best PyTorch Model State to output/model_weights_2b.pth")
 
-        #evaluate_model(accuracy_per_epoch=accuracy_per_epoch)
-        print("Evaluation succeeded")
-        model.load_state_dict(torch.load('output/model_weights_2b.pth'))
-        optimizer.load_state_dict(torch.load('output/optimizer_state_2b.pth'))
+        #model.load_state_dict(torch.load('output/model_weights_2b.pth'))
+        #optimizer.load_state_dict(torch.load('output/optimizer_state_2b.pth'))
+        save_model(epochs=e, model=model, optimizer=optimizer, criterion=criterion, best_accuracy=best_accuracy, output_path=output_path)
 
     # save the trained model weights for a final time
-    save_model(epochs, model, optimizer, criterion)
+    mean_acc = sum(val_acc)/len(val_acc)
+    save_model(epochs=epochs, model=model, optimizer=optimizer, criterion=criterion, best_accuracy=mean_acc, output_path=output_path)
     # save the loss and accuracy plots
-    save_plots(train_acc, val_acc)
+    save_plots(plot_path, train_acc, val_acc)
+    # print("Evaluation succeeded")
+    #evaluate_model(accuracy_per_epoch=val_acc)
 
     print("Done!")
 
