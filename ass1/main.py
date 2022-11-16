@@ -1,8 +1,7 @@
 from experiment import model_train_and_eval
+from utils import find_better_model
 
 # Press the green button in the gutter to run the script.
-from utils import load_model, find_better_model
-
 if __name__ == '__main__':
 
     dataset_path = "/home/mmc-user/dataset_simpsons/imgs"
@@ -14,47 +13,52 @@ if __name__ == '__main__':
     num_classes = 37
     epochs = 30
     learning_rate = 0.0001
+    split_factor = 0.6
 
     transform_type = "transform"
 
     best_model_output_path = "output/best_model_states.pth"
+
     # TODO implement training for different nets
     # TODO train and implement the ema net
-    '''
+
     # ResNet-training for 2a)
-    model_train_and_eval(best_model_output_path=best_model_output_path,
-                         plot_path="output/accuracy_plot_2b.png",
-                         output_path="output/state_2a.pth",
+    model_train_and_eval(name="2a",
                          dataset_path=dataset_path,
                          transform_type=transform_type,
+                         split_factor=split_factor,
                          model_name="ResNet18",
                          batch_size=batch_size,
                          num_classes=num_classes,
                          epochs=epochs,
                          learning_rate=learning_rate,
                          num_workers=16,
-                         use_scheduler=False)
+                         use_scheduler=False,
+                         load=False)
 
     # ConvNext-training for 2b)
-    model_train_and_eval(plot_path="output/accuracy_plot_2b.png",
-                         output_path="output/state_2b.pth",
+    model_train_and_eval(name="2b",
                          dataset_path=dataset_path,
                          transform_type=transform_type,
+                         split_factor=split_factor,
                          model_name="ConvNext",
                          batch_size=batch_size,
                          num_classes=num_classes,
                          epochs=epochs,
                          learning_rate=learning_rate,
                          num_workers=16,
-                         use_scheduler=False)
-    '''
+                         use_scheduler=False,
+                         load=False)
 
-    model_name = find_better_model("output/state_2a.pth", "ResNet18", "output/state_2b.pth", "ConvNext")
-    print(model_name)
+    model_name = find_better_model(model_name_1="ResNet18", model_name_2="ConvNext",
+                                   name_1="2a", name_2="2b")
+    print("Best model so far:", model_name)
     # Training of the best model with EMA-rate 2c)
-    '''
-    model_train_and_eval(dataset_path=dataset_path,
+
+    model_train_and_eval(name="2c",
+                         dataset_path=dataset_path,
                          transform_type=transform_type,
+                         split_factor=split_factor,
                          model_name=model_name,
                          batch_size=batch_size,
                          num_classes=num_classes,
@@ -64,12 +68,14 @@ if __name__ == '__main__':
                          ema=True,
                          ema_rate=0.998)
 
-    '''
+
     '''
     # add learning rate scheduler 2d)
-    model_train_and_eval(dataset_path=dataset_path,
+    model_train_and_eval(name="2d",
+                         dataset_path=dataset_path,
                          transform_type=transform_type,
-                         model_name="ConvNext",
+                         split_factor=split_factor,
+                         model_name=model_name,
                          batch_size=batch_size,
                          num_classes=num_classes,
                          epochs=epochs,
@@ -81,8 +87,10 @@ if __name__ == '__main__':
     '''
     # add data augmentation 2e)
 
-    model_train_and_eval(dataset_path=dataset_path,
-                         transform_type="geometric",
+    model_train_and_eval(name="2e",
+                         dataset_path=dataset_path,
+                         transform_type=model_name,
+                         split_factor=split_factor,
                          model_name="ConvNext",
                          batch_size=batch_size,
                          num_classes=num_classes,
@@ -94,9 +102,11 @@ if __name__ == '__main__':
     '''
     # add more data augmentation 2f)
 
-    model_train_and_eval(dataset_path=dataset_path,
-                         transform_type="colorjitter",
-                         model_name="ConvNext",
+    model_train_and_eval(name="2f",
+                         dataset_path=dataset_path,
+                         transform_type=model_name,
+                         split_factor=split_factor,
+                         model_name=best_model,
                          batch_size=batch_size,
                          num_classes=num_classes,
                          epochs=epochs,

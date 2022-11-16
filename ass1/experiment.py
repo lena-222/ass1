@@ -1,10 +1,7 @@
 """! brief Experiment."""
-
-import random
+import copy
 from datetime import datetime
 
-# from ema_pytorch import EMA
-import numpy as np
 import torch
 import torch.backends
 import torch.backends.cudnn
@@ -15,16 +12,16 @@ from tqdm import tqdm  # will be used for visualization loading
 
 import torch.utils.data
 from torch.utils.data import Subset
+
+from helper import get_mean_per_class, calculate_ema
 from image_dataset import ImageDataset
 
 # imports from my project
 from pytorch_models import ConvNextTiny
 from pytorch_models import ResNet18
 
-from utils import save_plots, save_model, load_model, \
-    make_reproducible  # , evaluate_model#, load_best_accuracy, save_best_accuracy
-
-
+from utils import save_plots, save_model, load_model, make_reproducible  #,
+                # evaluate_model, load_best_accuracy, save_best_accuracy
 
 def train(dataloader,
           model,
@@ -33,7 +30,11 @@ def train(dataloader,
           criterion,
           cur_iter,
           use_scaler,
-          num_classes):
+          num_classes,
+          ema=False,
+          ema_rate=0.0,
+          ema_model=None,
+          testmod=False):
     """Train model one epoch."""
 
     #torch.backends.cudnn.benchmark = True
@@ -47,25 +48,24 @@ def train(dataloader,
     counter = 0.0
     for i, data in tqdm(enumerate(dataloader), total=len(dataloader)):
         counter += 1
-        '''
-        if counter == 3 :
-            print("Training of epoch " + str(cur_iter) + " completed.")
-            accuracy = train_running_correct / len(dataloader.dataset)
-            return accuracy
-        '''
+
+        if testmod:
+            if counter == 3 :
+                print("Training of epoch " + str(cur_iter) + " completed.")
+                return get_mean_per_class(correct_labels=correct_labels, all_labels=all_labels, num_classes=num_classes)
+
         images = data[0].to(device)
         labels = data[1].to(device)
 
         optimizer.zero_grad()
+
         # torch.backends.cudnn.enabled = False
+
         if use_scaler:
             scaler = amp.GradScaler()
             with torch.cuda.amp.autocast():
                 output = model(images)
                 loss = criterion(output, labels)
-                # calculate the accuracy
-                #_, preds = torch.max(output.data, 1)
-                #train_running_correct += (preds == labels).sum().item()
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -74,7 +74,12 @@ def train(dataloader,
             loss = criterion(output, labels)
             loss.backward()
             optimizer.step()
-        # use mean per class accuracy as evaluation metric
+        if ema:
+            # calculate ema parameters
+            calculate_ema(iter(model.parameters()), iter(ema_model.parameters()), ema_rate)
+            calculate_ema(iter(model.buffers()), iter(ema_model.buffers()), ema_rate)
+
+        # use mean per class accuracy as evaluation metric on train data
         for label, prediction in zip(labels, output):
             pred_label = torch.argmax(prediction)
 
@@ -84,29 +89,26 @@ def train(dataloader,
             all_labels[label] += 1
 
     # torch.cuda.synchronize()
-    # accuracy = train_running_correct / len(dataloader.dataset)
-    # mean per class accuracy
-    not_zero = []
-    for i in range(0, num_classes):
-        if all_labels[i] > 0:
-            not_zero.append(i)
-    numerator = [correct_labels[i] / all_labels[i] for i in not_zero]
-    accuracy = sum(numerator) / len(not_zero)
-    print("Training of epoch " + str(cur_iter) + " completed.")
 
-    return accuracy
+    print("Training of epoch " + str(cur_iter) + " completed.")
+    return get_mean_per_class(correct_labels=correct_labels, all_labels=all_labels, num_classes=num_classes)
 
 
 def val(dataloader,
         model,
         device,
         cur_iter,
-        num_classes):
+        num_classes,
+        ema=False,
+        testmod=False):
 
     """Evaluate model on validation data."""
     # model.train()
     # val_loss_list = []
-    print('Validation')
+    if ema:
+        print('Validation of Ema')
+    else:
+        print('Validation')
 
     all_labels = torch.zeros(model.out_features)
     correct_labels = torch.zeros(model.out_features)
@@ -121,62 +123,38 @@ def val(dataloader,
     with torch.no_grad():
 
         for i, data in tqdm(enumerate(dataloader), total=len(dataloader)):
-                counter += 1
-            #for batch, data in enumerate(dataloader):
-                '''
+            counter += 1
+            if testmod:
+
                 if counter == 3:
+
                     print("Validation of epoch " + str(cur_iter) + " completed.")
-                    not_zero = []
-                    for i in range(0, num_classes):
-                        if all_labels[i] > 0:
-                            not_zero.append(i)
+                    return get_mean_per_class(correct_labels=correct_labels, all_labels=all_labels, num_classes=num_classes)
 
-                    numerator = [correct_labels[i] / all_labels[i] for i in not_zero]
-                    accuracy = sum(numerator) / len(not_zero)
-                    #accuracy = train_running_correct / len(dataloader.dataset)
-                    return accuracy
-                '''
-                images = data[0].to(device)
-                labels = data[1].to(device)
-                # forward pass
-                output = model(images)
+            images = data[0].to(device)
+            labels = data[1].to(device)
+            # forward pass
+            output = model(images)
 
-                # use mean per class accuracy as evaluation metric
-                for label, prediction in zip(labels, output):
-                    pred_label = torch.argmax(prediction)
+            # use mean per class accuracy as evaluation metric
+            for label, prediction in zip(labels, output):
+                pred_label = torch.argmax(prediction)
 
-                    if pred_label == label:
-                        correct_labels[label] += 1
+                if pred_label == label:
+                    correct_labels[label] += 1
 
-                    all_labels[label] += 1
-
-                #label, preds = torch.max(output.data, 1)
-                #valid_running_correct[label] += (preds == labels[label]).sum().item()
+                all_labels[label] += 1
 
             # torch.cuda.synchronize()
 
-    # mean per class accuracy
-    not_zero = []
-    for i in range(0, num_classes):
-        if all_labels[i] > 0:
-            not_zero.append(i)
-
-    numerator = [correct_labels[i] / all_labels[i] for i in not_zero]
-    accuracy = sum(numerator) / len(not_zero)
-    #valid_running_correct
-    #epoch_acc = valid_running_correct / len(dataloader.dataset)
-
     print("Validation of epoch " + str(cur_iter) + " completed.")
-    #print("Mean per class accuracy: ", epoch_acc)
-
-    return accuracy
+    return get_mean_per_class(correct_labels=correct_labels, all_labels=all_labels, num_classes=num_classes)
 
 
-def model_train_and_eval(best_model_output_path,
-                         plot_path,
-                         output_path,
+def model_train_and_eval(name,
                          dataset_path,
                          transform_type,
+                         split_factor,
                          model_name,
                          batch_size,
                          num_classes,
@@ -185,7 +163,8 @@ def model_train_and_eval(best_model_output_path,
                          num_workers=16,
                          use_scheduler=False,
                          ema=False,
-                         ema_rate=None):
+                         ema_rate=None,
+                         load=True):
 
     print("Experiment will be started!")
 
@@ -204,6 +183,7 @@ def model_train_and_eval(best_model_output_path,
     # torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.benchmark = True
 
+    #load_data(dataset_path=dataset_path, transform_type=transform_type, split_factor=split_factor)
     # create dataset with custom Dataset class ImageDataset
     print("Start loading ImageDataSet...")
     train_dataset = ImageDataset(data_path=dataset_path, transform_type=transform_type)
@@ -215,7 +195,7 @@ def model_train_and_eval(best_model_output_path,
     # get the training dataset size, need this to calculate the...
     # number if validation images
     # validation size = number of validation images
-    valid_size = int(0.4 * len(train_dataset))
+    valid_size = int((1 - split_factor) * len(train_dataset))
     # all the indices from the training set
     indices = torch.randperm(len(train_dataset)).tolist()
     train_data = Subset(train_dataset, indices[:-valid_size])
@@ -226,8 +206,7 @@ def model_train_and_eval(best_model_output_path,
     torch.Generator().manual_seed(0)
     train_dataloader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, num_workers=num_workers,
                                                    shuffle=True, generator=torch.Generator())
-    val_dataloader = torch.utils.data.DataLoader(val_data, batch_size=1, shuffle=True, drop_last=True,
-                                                 worker_init_fn=worker_seed, num_workers=num_workers,
+    val_dataloader = torch.utils.data.DataLoader(val_data, batch_size=1, shuffle=True, drop_last=True, num_workers=num_workers,
                                                  generator=torch.Generator())
 
     # set model
@@ -238,6 +217,12 @@ def model_train_and_eval(best_model_output_path,
     else:
         raise ValueError("Model not found!")
     print("Used Model: ", model_name)
+
+    if ema:
+        ema_model = copy.deepcopy(model)
+        ema_model.to(device)
+    else:
+        ema_model = None
 
     trainable_parameters = [p for p in model.parameters() if p.requires_grad]
 
@@ -256,100 +241,78 @@ def model_train_and_eval(best_model_output_path,
 
     train_acc = []
     val_acc = []
-    best_acc_run = 0
-    best_accuracy = 0
+    ema_val_acc = []
+    #best_acc_run = 0.0
+    best_accuracy = 0.0
+
 
     print("Start training...")
 
-    start_e = 1
-    for e in range(start_e, epochs + 1):
-
-        try:
-            e, model, optimizer, criterion, best_acc_run = load_model(e=e, model=model, optimizer=optimizer,
-                                                     criterion=criterion,accuracy=best_acc_run,
-                                                     output_path=output_path)
-            _, _, _, _, best_accuracy = load_model(e=None, model=None, optimizer=None, criterion=criterion,
-                                                   accuracy=best_accuracy, output_path=best_model_output_path)
-        except FileNotFoundError:
-            pass
+    #start_e = 1
+    for e in range(1, epochs + 1):
+        if load:
+            try:
+                e, model, optimizer, criterion, best_acc_run = load_model(name=name, e=e, model=model, optimizer=optimizer,
+                                                                          criterion=criterion)
+                if ema:
+                    _, ema_model, _, _, ema_best_acc_run = load_model(name=f'{name}_ema', e=e, model=ema_model, optimizer=optimizer,
+                                                                  criterion=criterion)
+            except FileNotFoundError:
+                pass
 
         print("Current epoch: ", e)
-        #cur_iter = e * num_batches
         train_acc_e = train(dataloader=train_dataloader, model=model, optimizer=optimizer, device=device, criterion=criterion,
-                            cur_iter=e, use_scaler=True, num_classes=num_classes)
-        #cur_iter += num_batches
-        # val_acc, _, _ = get_test_accuracy(model, val_dataloader, device)
+                            cur_iter=e, use_scaler=True, num_classes=num_classes, ema=ema, ema_rate=ema_rate, ema_model=ema_model)
 
         val_acc_e = val(dataloader=val_dataloader, model=model,
                       device=device, cur_iter=e, num_classes=num_classes)
-        #accuracy_per_epoch[e] = val_acc
+        train_acc.append(train_acc_e)
+        val_acc.append(val_acc_e)
+
+        # if val_acc_e > best_acc_run:
+        #    best_acc_run = val_acc_e
+
+        mean_acc = sum(val_acc) / len(val_acc)
+        save_model(epochs=e, model=model, optimizer=optimizer, criterion=criterion, accuracy=mean_acc, name=name)
+
+        if ema:
+            ema_val_acc_e = val(dataloader=val_dataloader, model=ema_model,
+                                device=device,  cur_iter=e, num_classes=num_classes,ema=ema)
+            ema_val_acc.append(ema_val_acc_e)
+
+            print(f"Training acc: {train_acc_e:.3f}")
+            print(f"Validation acc: {val_acc_e:.3f}, ema validation acc: {ema_val_acc_e:.3f}")
+
+            ema_mean_acc = sum(ema_val_acc) / len(ema_val_acc)
+
+            save_model(epochs=e, model=ema_model, optimizer=optimizer, criterion=criterion, accuracy=ema_mean_acc,
+                       name=f"{name}_ema")
+        else:
+            print(f"Training acc: {train_acc_e:.3f}")
+            print(f"Validation acc: {val_acc_e:.3f}")
 
         if use_scheduler and scheduler is not None:
             scheduler.step()
 
-        train_acc.append(train_acc_e)
-        val_acc.append(val_acc_e)
-        print(f"Training acc: {train_acc_e:.3f}")
-        print(f"Validation acc: {val_acc_e:.3f}")
-
-        #torch.save(model.state_dict(), "output/model_weights_2b.pth")
-        #print("Saved PyTorch Model State to output/model_weights_2b.pth")
-        #torch.save(optimizer.state_dict(), "output/optimizer_state_2b.pth")
-        #print("Saved PyTorch Optimizer State to output/optimizer_weights_2b.pth")
-        if val_acc_e > best_acc_run:
-            best_acc_run = val_acc_e
-            #save_model(e, model, optimizer, criterion, best_acc_run, output_path)
-
-
-        if val_acc_e >= best_accuracy:
-            save_model(epochs=e, model=model, optimizer=optimizer, criterion=criterion, best_accuracy=best_accuracy, output_path=best_model_output_path)
-
-        save_model(epochs=e, model=model, optimizer=optimizer, criterion=criterion, best_accuracy=best_accuracy, output_path=output_path)
-
     # save the trained model weights for a final time
-    mean_acc = sum(val_acc)/len(val_acc)
-    save_model(epochs=epochs, model=model, optimizer=optimizer, criterion=criterion, best_accuracy=mean_acc, output_path=output_path)
+    save_model(epochs=epochs, model=model, optimizer=optimizer, criterion=criterion, accuracy=mean_acc, name=name)
+
     # save the loss and accuracy plots
-    save_plots(plot_path, train_acc, val_acc)
+    save_plots(name, train_acc, val_acc)
+
+    # Evaluation with tensorboard,
+    # evaluate_model(accuracy_per_epoch=val_acc)
     # print("Evaluation succeeded")
-    #evaluate_model(accuracy_per_epoch=val_acc)
+
+    # compare trained model and best model
+    try:
+        _, _, _, _, best_accuracy = load_model(name="best", e=None, model=None, optimizer=None, criterion=criterion,
+                                               accuracy=best_accuracy)
+    except FileNotFoundError:
+        pass
+    # save the best model
+    if mean_acc >= best_accuracy:
+        save_model(epochs=epochs, model=model, optimizer=optimizer, criterion=criterion, accuracy=best_accuracy,
+                   name="best")
 
     print("Done!")
-
-
-
-
-# TODO Initialize second model with EMA-rates and the same weights from before
-''' NOT USED YET 
-https://github.com/lucidrains/ema-pytorch
-
-# wrap your neural network, specify the decay (beta)
-
-ema = EMA(
-    net,
-    beta = 0.998,              # exponential moving average factor
-    update_after_step = 100,    # only after this number of .update() calls will it start updating
-    update_every = 10,          # how often to actually update, to save on compute (updates every 10th .update() call)
-)
-
-# mutate your network, with SGD or otherwise
-
-with torch.no_grad():
-    net.weight.copy_(torch.randn_like(net.weight))
-    net.bias.copy_(torch.randn_like(net.bias))
-
-# you will call the update function on your moving average wrapper
-
-ema.update()
-
-# then, later on, you can invoke the EMA model the same way as your network
-
-data = torch.randn(1, 512)
-
-output     = net(data)
-ema_output = ema(data)
-
-# if you want to save your ema model, it is recommended you save the entire wrapper
-# as it contains the number of steps taken (there is a warmup logic in there, recommended by @crowsonkb, validated for a number of projects now)
-# however, if you wish to access the copy of your model with EMA, then it will live at ema.ema_model
-'''
