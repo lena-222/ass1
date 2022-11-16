@@ -1,6 +1,8 @@
 from experiment import model_train_and_eval
 
 # Press the green button in the gutter to run the script.
+from utils import load_model, find_better_model
+
 if __name__ == '__main__':
 
     dataset_path = "/home/mmc-user/dataset_simpsons/imgs"
@@ -15,10 +17,13 @@ if __name__ == '__main__':
 
     transform_type = "transform"
 
+    best_model_output_path = "output/best_model_states.pth"
     # TODO implement training for different nets
-    # TODO train the first ResNet
+    # TODO train and implement the ema net
+    '''
     # ResNet-training for 2a)
-    model_train_and_eval(plot_path="output/accuracy_plot_2b.png",
+    model_train_and_eval(best_model_output_path=best_model_output_path,
+                         plot_path="output/accuracy_plot_2b.png",
                          output_path="output/state_2a.pth",
                          dataset_path=dataset_path,
                          transform_type=transform_type,
@@ -26,8 +31,9 @@ if __name__ == '__main__':
                          batch_size=batch_size,
                          num_classes=num_classes,
                          epochs=epochs,
-                         learning_rate=learning_rate)
-
+                         learning_rate=learning_rate,
+                         num_workers=16,
+                         use_scheduler=False)
 
     # ConvNext-training for 2b)
     model_train_and_eval(plot_path="output/accuracy_plot_2b.png",
@@ -38,20 +44,27 @@ if __name__ == '__main__':
                          batch_size=batch_size,
                          num_classes=num_classes,
                          epochs=epochs,
-                         learning_rate=learning_rate)
+                         learning_rate=learning_rate,
+                         num_workers=16,
+                         use_scheduler=False)
     '''
+
+    model_name = find_better_model("output/state_2a.pth", "ResNet18", "output/state_2b.pth", "ConvNext")
+    print(model_name)
     # Training of the best model with EMA-rate 2c)
-    ema = True
-    ema_rate = 0.998
+    '''
     model_train_and_eval(dataset_path=dataset_path,
                          transform_type=transform_type,
-                         model_name="ConvNext",
+                         model_name=model_name,
                          batch_size=batch_size,
                          num_classes=num_classes,
                          epochs=epochs,
-                         learning_rate=learning_rate)
-    '''
+                         learning_rate=learning_rate, 
+                         num_workers=16,
+                         ema=True,
+                         ema_rate=0.998)
 
+    '''
     '''
     # add learning rate scheduler 2d)
     model_train_and_eval(dataset_path=dataset_path,
@@ -60,7 +73,9 @@ if __name__ == '__main__':
                          batch_size=batch_size,
                          num_classes=num_classes,
                          epochs=epochs,
-                         learning_rate=learning_rate)
+                         learning_rate=learning_rate,
+                         num_workers=16,
+                         use_scheduler=True)
     '''
 
     '''
@@ -72,6 +87,7 @@ if __name__ == '__main__':
                          batch_size=batch_size,
                          num_classes=num_classes,
                          epochs=epochs,
+                         num_workers=16,
                          learning_rate=learning_rate)
     '''
 

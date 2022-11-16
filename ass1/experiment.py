@@ -10,22 +10,20 @@ import torch.backends
 import torch.backends.cudnn
 import torch.cuda.amp as amp  # will be used for mixed precision training
 import torch.nn as nn
-import torch.utils.data
-from torch.utils.data import Subset
+
 from tqdm import tqdm  # will be used for visualization loading
 
+import torch.utils.data
+from torch.utils.data import Subset
 from image_dataset import ImageDataset
+
+# imports from my project
 from pytorch_models import ConvNextTiny
 from pytorch_models import ResNet18
-from utils import save_plots, save_model#, evaluate_model#, load_best_accuracy, save_best_accuracy
 
+from utils import save_plots, save_model, load_model, \
+    make_reproducible  # , evaluate_model#, load_best_accuracy, save_best_accuracy
 
-def make_reproducible():
-    """Set seeds to make the experiment reproducible (see https://pytorch.org/docs/stable/notes/randomness.html)"""
-    random.seed(0)
-    torch.manual_seed(0)
-    np.random.seed(0)
-    torch.Generator().manual_seed(0)
 
 
 def train(dataloader,
@@ -62,7 +60,7 @@ def train(dataloader,
         # torch.backends.cudnn.enabled = False
         if use_scaler:
             scaler = amp.GradScaler()
-            with torch.cuda.amp.autocast(enabled=scaler is not None):
+            with torch.cuda.amp.autocast():
                 output = model(images)
                 loss = criterion(output, labels)
                 # calculate the accuracy
@@ -174,7 +172,8 @@ def val(dataloader,
     return accuracy
 
 
-def model_train_and_eval(plot_path,
+def model_train_and_eval(best_model_output_path,
+                         plot_path,
                          output_path,
                          dataset_path,
                          transform_type,
@@ -183,11 +182,11 @@ def model_train_and_eval(plot_path,
                          num_classes,
                          epochs,
                          learning_rate,
+                         num_workers=16,
                          use_scheduler=False,
                          ema=False,
                          ema_rate=None):
 
-    #best_accuracy = load_best_accuracy('best_accuracy.csv')
     print("Experiment will be started!")
 
     # datetime object containing current date and time
@@ -200,10 +199,10 @@ def model_train_and_eval(plot_path,
 
     # make experiment reproducible
     print("Seeds are set!")
-    make_reproducible()
+    worker_seed = make_reproducible()
 
     # torch.backends.cudnn.benchmark = False
-    # torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.benchmark = True
 
     # create dataset with custom Dataset class ImageDataset
     print("Start loading ImageDataSet...")
@@ -212,11 +211,6 @@ def model_train_and_eval(plot_path,
 
     # Split data into train and validation data
     print("Split dataset into train and validation set...")
-    #train_size = int(0.6 * len(train_dataset))
-    #val_size = len(train_dataset) - train_size
-
-    #train_data, val_data = torch.utils.data.random_split(full_dataset, [train_size, val_size])
-    # train_data.dataset = copy.copy(full_dataset)  # is needed to work - still only train data is used
 
     # get the training dataset size, need this to calculate the...
     # number if validation images
@@ -224,15 +218,17 @@ def model_train_and_eval(plot_path,
     valid_size = int(0.4 * len(train_dataset))
     # all the indices from the training set
     indices = torch.randperm(len(train_dataset)).tolist()
-    # final train dataset discarding the indices belonging to `valid_size` and after
     train_data = Subset(train_dataset, indices[:-valid_size])
-    # final valid dataset from indices belonging to `valid_size` and after
     val_data = Subset(val_dataset, indices[-valid_size:])
     print(f"Total training images: {len(train_data)}")
     print(f"Total validation images: {len(val_data)}")
 
-    train_dataloader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    val_dataloader = torch.utils.data.DataLoader(val_data, batch_size=1)
+    torch.Generator().manual_seed(0)
+    train_dataloader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, num_workers=num_workers,
+                                                   shuffle=True, generator=torch.Generator())
+    val_dataloader = torch.utils.data.DataLoader(val_data, batch_size=1, shuffle=True, drop_last=True,
+                                                 worker_init_fn=worker_seed, num_workers=num_workers,
+                                                 generator=torch.Generator())
 
     # set model
     if model_name == 'ResNet18':
@@ -247,7 +243,6 @@ def model_train_and_eval(plot_path,
 
     # criterion for classification
     criterion = nn.CrossEntropyLoss()
-    #accuracy_per_epoch = np.zeros(epochs)
 
     # set adam optimizer and a learning rate of 0.0001
     # eventually create schedular and use sdg optimizer,
@@ -259,50 +254,29 @@ def model_train_and_eval(plot_path,
         optimizer = torch.optim.Adam(trainable_parameters, lr=learning_rate)
         scheduler = None
 
-    #num_batches = np.ceil(len(train_data) / batch_size)
-    #best_acc = 0.0  # save the best accuracy later
-    use_scaler = True
-
     train_acc = []
     val_acc = []
     best_acc_run = 0
     best_accuracy = 0
 
     print("Start training...")
-    '''
-    try:
-        checkpoint = torch.load(output_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        start_e = checkpoint['epoch'] + 1
-        criterion = checkpoint['loss']
-        # best_accuracy_run = checkpoint['best_accuracy']
 
-        best_checkpoint = torch.load("output/best_model_states.pth")
-        best_accuracy = best_checkpoint['best_accuracy']
-    except FileNotFoundError:
-        pass
-    '''
     start_e = 1
     for e in range(start_e, epochs + 1):
-        '''
-        try:
-            checkpoint = torch.load(output_path)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            e = checkpoint['epoch']
-            criterion = checkpoint['loss']
-            #best_accuracy_run = checkpoint['best_accuracy']
 
-            best_checkpoint = torch.load("output/best_model_states.pth")
-            best_accuracy = best_checkpoint['best_accuracy']
+        try:
+            e, model, optimizer, criterion, best_acc_run = load_model(e=e, model=model, optimizer=optimizer,
+                                                     criterion=criterion,accuracy=best_acc_run,
+                                                     output_path=output_path)
+            _, _, _, _, best_accuracy = load_model(e=None, model=None, optimizer=None, criterion=criterion,
+                                                   accuracy=best_accuracy, output_path=best_model_output_path)
         except FileNotFoundError:
             pass
-        '''
+
         print("Current epoch: ", e)
         #cur_iter = e * num_batches
         train_acc_e = train(dataloader=train_dataloader, model=model, optimizer=optimizer, device=device, criterion=criterion,
-                            cur_iter=e, use_scaler=use_scaler, num_classes=num_classes)
+                            cur_iter=e, use_scaler=True, num_classes=num_classes)
         #cur_iter += num_batches
         # val_acc, _, _ = get_test_accuracy(model, val_dataloader, device)
 
@@ -324,19 +298,12 @@ def model_train_and_eval(plot_path,
         #print("Saved PyTorch Optimizer State to output/optimizer_weights_2b.pth")
         if val_acc_e > best_acc_run:
             best_acc_run = val_acc_e
-        save_model(e, model, optimizer, criterion, best_acc_run, output_path)
+            #save_model(e, model, optimizer, criterion, best_acc_run, output_path)
 
 
         if val_acc_e >= best_accuracy:
-            # best_acc = val_acc
-            #save_best_accuracy('best_accuracy.csv', val_acc_e)
-            save_model(epochs=e, model=model, optimizer=optimizer, criterion=criterion, best_accuracy=best_accuracy, output_path="output/best_model_states.pth")
-            #torch.save(model.state_dict(), "output/best_model_weights_2b.pth")
-            #torch.save(optimizer.state_dict(), "output/best_optimizer_state_2b.pth")
-            #print("Saved best PyTorch Model State to output/model_weights_2b.pth")
+            save_model(epochs=e, model=model, optimizer=optimizer, criterion=criterion, best_accuracy=best_accuracy, output_path=best_model_output_path)
 
-        #model.load_state_dict(torch.load('output/model_weights_2b.pth'))
-        #optimizer.load_state_dict(torch.load('output/optimizer_state_2b.pth'))
         save_model(epochs=e, model=model, optimizer=optimizer, criterion=criterion, best_accuracy=best_accuracy, output_path=output_path)
 
     # save the trained model weights for a final time
@@ -348,6 +315,8 @@ def model_train_and_eval(plot_path,
     #evaluate_model(accuracy_per_epoch=val_acc)
 
     print("Done!")
+
+
 
 
 # TODO Initialize second model with EMA-rates and the same weights from before

@@ -1,10 +1,9 @@
+from random import random
+
+import numpy as np
 from matplotlib import pyplot as plt
 import torch
 from torch.utils.tensorboard import SummaryWriter
-import csv
-import os
-import numpy as np
-import pandas as pd
 
 """ 
 util.py 
@@ -26,7 +25,37 @@ def save_model(epochs, model, optimizer, criterion, best_accuracy, output_path):
                 'accuracy': best_accuracy,
                 }, output_path)
 
+def load_model(e, model, optimizer, criterion, accuracy, output_path):
+    """
+    Function to load the trained model to disk.
+    """
+    print(f"Loading model ...")
 
+    try:
+        checkpoint = torch.load(output_path)
+        if model is not None:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        if optimizer is not None:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        e = checkpoint['epoch']
+        criterion = checkpoint['loss']
+        accuracy = checkpoint['accuracy']
+
+        #best_checkpoint = torch.load("output/best_model_states.pth")
+        #best_accuracy = best_checkpoint['best_accuracy']
+    except FileNotFoundError:
+        pass
+    return e,  model, optimizer, criterion, accuracy
+
+def find_better_model(output_path_1, model_name_1, output_path_2, model_name_2):
+    _, _, _, _, accuracy_1 = load_model(e=None, model=None, optimizer=None, criterion=None,
+                                             accuracy=0.0, output_path=output_path_1)
+    _, _, _, _, accuracy_2 = load_model(e=None, model=None, optimizer=None, criterion=None,
+                                             accuracy=0.0, output_path=output_path_2)
+    best_model = model_name_2
+    if accuracy_1 > accuracy_2:
+        best_model = model_name_1
+    return best_model
 
 
 def save_plots(plot_path, train_acc, valid_acc, train_loss = None, valid_loss = None):
@@ -62,6 +91,14 @@ def save_plots(plot_path, train_acc, valid_acc, train_loss = None, valid_loss = 
     #plt.ylabel('Loss')
     #plt.legend()
     #plt.savefig('outputs/loss.png')
+
+def make_reproducible():
+    """Set seeds to make the experiment reproducible (see https://pytorch.org/docs/stable/notes/randomness.html)"""
+    torch.Generator().manual_seed(0)
+    worker_seed = torch.initial_seed() % 2 ** 32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    return worker_seed
 """
 
 def evaluate_model(accuracy_per_epoch):
